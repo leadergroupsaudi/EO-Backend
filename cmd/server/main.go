@@ -416,11 +416,12 @@ func main() {
 	ticketTypes.Put("/:code/links", authMiddleware.RequirePermission("workflows:update"), ticketHandler.SaveLink)
 
 	ticketTypes.Put("/:code/fields", authMiddleware.RequirePermission("workflows:update"), ticketHandler.SetFields)
-	ticketTypes.Get("/:code/go-live-checks", authMiddleware.RequirePermission("workflows:view"), ticketHandler.GoLiveChecks)
 	ticketTypes.Post("/:code/publish", authMiddleware.RequirePermission("workflows:update"), ticketHandler.PublishType)
 	ticketTypes.Delete("/:code", authMiddleware.RequirePermission("workflows:delete"), ticketHandler.DeleteType)
 
 	tickets := v1.Group("/tickets", authMiddleware.Authenticate())
+	tickets.Get("/attachments/:attachment_id/download", authMiddleware.RequirePermission("incidents:view"), ticketHandler.DownloadAttachment)
+	tickets.Delete("/attachments/:attachment_id", authMiddleware.RequirePermission("incidents:update"), ticketHandler.DeleteAttachment)
 	tickets.Post("/", authMiddleware.RequirePermission("incidents:create"), ticketHandler.CreateTicket)
 	tickets.Get("/", authMiddleware.RequirePermission("incidents:view"), ticketHandler.ListTickets)
 	tickets.Post("/search", authMiddleware.RequirePermission("incidents:view"), ticketHandler.SearchTickets)
@@ -432,8 +433,6 @@ func main() {
 	tickets.Get("/:id/comments", authMiddleware.RequirePermission("incidents:view"), ticketHandler.ListComments)
 	tickets.Post("/:id/attachments", authMiddleware.RequirePermission("incidents:update"), ticketHandler.UploadAttachment)
 	tickets.Get("/:id/attachments", authMiddleware.RequirePermission("incidents:view"), ticketHandler.ListAttachments)
-	tickets.Get("/:id/attachments/:attachment_id/download", authMiddleware.RequirePermission("incidents:view"), ticketHandler.DownloadAttachment)
-	tickets.Delete("/:id/attachments/:attachment_id", authMiddleware.RequirePermission("incidents:update"), ticketHandler.DeleteAttachment)
 
 	// Incident routes (authenticated users)
 	incidents := v1.Group("/incidents", authMiddleware.Authenticate(), licenseMiddleware.RequireLicensedFeature(string(licensing.FeatureIncidents)))
@@ -1020,11 +1019,19 @@ func customErrorHandler(c *fiber.Ctx, err error) error {
 		code = e.Code
 		message = e.Message
 	}
+	// Fiber's default text ("Cannot DELETE /api/v1/...") exposes the API path.
+	logged := message
+	switch code {
+	case fiber.StatusNotFound:
+		message = "The requested resource was not found"
+	case fiber.StatusMethodNotAllowed:
+		message = "This action is not allowed here"
+	}
 
 	// Errors raised before the Error Log middleware runs (for example a request body over
 	// the size limit) are only visible here.
 	if recorded, _ := c.Locals(utils.LocalErrorRecorded).(bool); !recorded {
-		middleware.RecordRequestError(c, code, message, "")
+		middleware.RecordRequestError(c, code, logged, "")
 	}
 
 	return c.Status(code).JSON(fiber.Map{

@@ -47,7 +47,7 @@ func validateAttributes(tx *gorm.DB, fieldsJSON datatypes.JSON, attrs map[string
 		// Files are uploaded after the ticket exists (POST /tickets/:id/attachments).
 		if f.Type == "file" {
 			if !empty {
-				errs = append(errs, f.Label+": upload files with POST /tickets/:id/attachments after the ticket is created")
+				errs = append(errs, f.Label+": add files as attachments after the ticket is created")
 			}
 			continue
 		}

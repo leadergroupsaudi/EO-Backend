@@ -372,7 +372,7 @@ func createTicketTx(tx *gorm.DB, typeCode string, parentID *uuid.UUID, title str
 		return nil, fmt.Errorf("ticket type %s not found", typeCode)
 	}
 	if t.Status != models.TicketTypeLive {
-		return nil, fmt.Errorf("%s is not live yet; publish it with POST /ticket-types/%s/publish", t.Name, t.Code)
+		return nil, fmt.Errorf("%s is not live yet; publish it before creating tickets of this type", t.Name)
 	}
 	if t.WorkflowID == nil {
 		return nil, fmt.Errorf("%s has no workflow", t.Name)

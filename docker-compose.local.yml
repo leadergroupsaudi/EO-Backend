@@ -1,0 +1,120 @@
+
+x-minio-common: &minio-common
+
+  image: ${MINIO_IMAGE:-quay.io/minio/minio:latest}
+  command: server --console-address ":9090" /mnt/data
+  user: "0:0"
+  healthcheck:
+    test: ["CMD", "mc", "ready", "local"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - automax_db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER must be set in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME must be set in .env}
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - automax_redis:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+
+  minio:
+    <<: *minio-common
+    hostname: minio
+    restart: unless-stopped
+    volumes:
+      - automax_minio:/mnt/data
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9090}:9090"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set in .env}
+
+  backend:
+    profiles: ["app"]
+    build:
+      context: .
+    image: eo-backend:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.docker   
+        required: false
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:?DB_USER must be set in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      DB_NAME: ${DB_NAME:?DB_NAME must be set in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY must be set in .env}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY must be set in .env}
+      SERVER_PORT: "8080"
+      APP_ENV: ${APP_ENV:-development}
+      FRONTEND_URL: ${FRONTEND_URL_DOCKER:-http://localhost:3000}
+      SSO_FRONTEND_URL: ${FRONTEND_URL_DOCKER:-http://localhost:3000}
+      ALLOW_ORIGINS: ${ALLOW_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      CHROME_BIN: /usr/bin/chromium-browser
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ${EO_CLIENT_DIR:-../EO-Client}
+    image: eo-client:local
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:${BACKEND_PORT:-8080}/api/v1
+      VITE_WS_URL: ws://localhost:${BACKEND_PORT:-8080}
+      VITE_BASE_PATH: /
+      VITE_LOGIN_REGULAR: "true"
+      VITE_LOGIN_LDAP: ${VITE_LOGIN_LDAP:-false}
+      VITE_LOGIN_SSO: ${VITE_LOGIN_SSO:-false}
+      VITE_ENABLE_GIS: "false"
+      VITE_ENABLE_SIGNUP: "false"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  automax_db:
+  automax_redis:
+  automax_minio:
+  

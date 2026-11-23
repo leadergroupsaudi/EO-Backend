@@ -35,7 +35,7 @@ func TestValidateAttributes(t *testing.T) {
 		{"bad option", map[string]interface{}{"subject": "x", "topic": "Sport"}, true, []string{"Topic: must be one of Economy, Health"}},
 		{"multi needs list", map[string]interface{}{"subject": "x", "tags": "a"}, true, []string{"Tags: must be a list"}},
 		{"single refuses list", map[string]interface{}{"subject": []interface{}{"x"}}, true, []string{"Subject: takes one value"}},
-		{"file at create", map[string]interface{}{"subject": "x", "evidence": []interface{}{"f"}}, true, []string{"Evidence: upload files"}},
+		{"file at create", map[string]interface{}{"subject": "x", "evidence": []interface{}{"f"}}, true, []string{"Evidence: add files as attachments"}},
 	}
 	for _, c := range cases {
 		err := validateAttributes(nil, datatypes.JSON(testFields), c.attrs, c.required)

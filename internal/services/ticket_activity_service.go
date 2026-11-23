@@ -113,9 +113,9 @@ func (s *TicketService) ListAttachments(ctx context.Context, ticketID uuid.UUID)
 	return rows, err
 }
 
-func (s *TicketService) GetAttachment(ctx context.Context, ticketID, attachmentID uuid.UUID) (*models.TicketAttachment, error) {
+func (s *TicketService) GetAttachment(ctx context.Context, attachmentID uuid.UUID) (*models.TicketAttachment, error) {
 	var a models.TicketAttachment
-	if err := s.db.WithContext(ctx).First(&a, "id = ? AND ticket_id = ?", attachmentID, ticketID).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&a, "id = ?", attachmentID).Error; err != nil {
 		return nil, errors.New("attachment not found")
 	}
 	return &a, nil
@@ -123,8 +123,8 @@ func (s *TicketService) GetAttachment(ctx context.Context, ticketID, attachmentI
 
 // DeleteAttachment removes the record (only its uploader may) and returns it
 // so the handler can delete the file from MinIO.
-func (s *TicketService) DeleteAttachment(ctx context.Context, ticketID, attachmentID, userID uuid.UUID) (*models.TicketAttachment, error) {
-	a, err := s.GetAttachment(ctx, ticketID, attachmentID)
+func (s *TicketService) DeleteAttachment(ctx context.Context, attachmentID, userID uuid.UUID) (*models.TicketAttachment, error) {
+	a, err := s.GetAttachment(ctx, attachmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (s *TicketService) DeleteAttachment(ctx context.Context, ticketID, attachme
 		if err := tx.Delete(a).Error; err != nil {
 			return err
 		}
-		return logActivity(tx, ticketID, models.TicketActivityAttachmentRemoved, fmt.Sprintf("Attachment removed: %s", a.FileName),
+		return logActivity(tx, a.TicketID, models.TicketActivityAttachmentRemoved, fmt.Sprintf("Attachment removed: %s", a.FileName),
 			map[string]interface{}{"attachment_id": a.ID, "file_name": a.FileName}, userID)
 	})
 	return a, err

@@ -237,16 +237,6 @@ func (s *TicketService) SetFields(ctx context.Context, code string, fields []mod
 	return &t, nil
 }
 
-// GoLiveChecks returns the "Before it can go live" list for a type.
-func (s *TicketService) GoLiveChecks(ctx context.Context, code string) ([]models.GoLiveCheck, error) {
-	var t models.TicketType
-	db := s.db.WithContext(ctx)
-	if err := db.Where("code = ?", strings.ToUpper(code)).First(&t).Error; err != nil {
-		return nil, fmt.Errorf("ticket type %s not found", code)
-	}
-	return goLiveChecks(db, &t), nil
-}
-
 // PublishType makes a draft type live once every go-live check passes.
 func (s *TicketService) PublishType(ctx context.Context, code string) (*models.TicketType, []models.GoLiveCheck, error) {
 	db := s.db.WithContext(ctx)
@@ -548,7 +538,7 @@ func goLiveChecks(tx *gorm.DB, t *models.TicketType) []models.GoLiveCheck {
 	_ = json.Unmarshal(t.Fields, &fields)
 	checks = append(checks, models.GoLiveCheck{
 		Label: "At least one field", OK: len(fields) > 0,
-		Hint: "Add fields with PUT /ticket-types/" + t.Code + "/fields",
+		Hint: "Add at least one field on the Fields tab",
 	})
 
 	var states []models.WorkflowState
@@ -562,7 +552,7 @@ func goLiveChecks(tx *gorm.DB, t *models.TicketType) []models.GoLiveCheck {
 	}
 	checks = append(checks, models.GoLiveCheck{
 		Label: "At least two states", OK: t.WorkflowID != nil && len(states) >= 2 && hasInitial && hasTerminal,
-		Hint: "Set workflow_id to a workflow with an initial and a terminal state",
+		Hint: "Choose a workflow that has a start state and an end state",
 	})
 
 	closure := false
@@ -576,7 +566,7 @@ func goLiveChecks(tx *gorm.DB, t *models.TicketType) []models.GoLiveCheck {
 	}
 	checks = append(checks, models.GoLiveCheck{
 		Label: "A closure condition", OK: closure,
-		Hint: "The workflow needs a transition into a terminal state",
+		Hint: "The workflow needs a step that moves the ticket into an end state",
 	})
 
 	if t.ParentTypeID != nil {
@@ -588,11 +578,11 @@ func goLiveChecks(tx *gorm.DB, t *models.TicketType) []models.GoLiveCheck {
 		}
 		checks = append(checks, models.GoLiveCheck{
 			Label: "Link behaviour set on the parent", OK: n > 0,
-			Hint: "Set it with PUT /ticket-types/" + p.Code + "/links",
+			Hint: "Link this type on " + p.Name + "'s Linked types tab",
 		})
 		checks = append(checks, models.GoLiveCheck{
 			Label: "Parent type is live", OK: parentOK && p.Status == models.TicketTypeLive,
-			Hint: "Publish " + p.Code + " first",
+			Hint: "Publish " + p.Name + " first",
 		})
 	}
 	return checks

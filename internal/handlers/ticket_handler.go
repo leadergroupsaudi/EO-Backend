@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/automax/backend/internal/models"
@@ -25,6 +26,15 @@ func NewTicketHandler(service *services.TicketService, storage *storage.MinIOSto
 	return &TicketHandler{service: service, storage: storage}
 }
 
+
+func typeCode(c *fiber.Ctx) string {
+	code := c.Params("code")
+	if decoded, err := url.PathUnescape(code); err == nil {
+		code = decoded
+	}
+	return strings.TrimSpace(code)
+}
+
 // GET /ticket-types?status=live&level=main&search=dir
 func (h *TicketHandler) ListTypes(c *fiber.Ctx) error {
 	var f models.TicketTypeFilter
@@ -40,11 +50,11 @@ func (h *TicketHandler) ListTypes(c *fiber.Ctx) error {
 
 // GET /ticket-types/:code
 func (h *TicketHandler) GetType(c *fiber.Ctx) error {
-	d, err := h.service.GetType(c.UserContext(), c.Params("code"))
+	d, err := h.service.GetType(c.UserContext(), typeCode(c))
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, err.Error())
 	}
-	next, _ := h.service.PreviewNextReference(c.UserContext(), c.Params("code"))
+	next, _ := h.service.PreviewNextReference(c.UserContext(), typeCode(c))
 	return utils.SuccessResponse(c, fiber.StatusOK, "ok", fiber.Map{"type": d.Type, "links": d.Links, "next_reference": next})
 }
 
@@ -73,7 +83,7 @@ func (h *TicketHandler) UpdateType(c *fiber.Ctx) error {
 	if errs := validation.ValidateStruct(c.UserContext(), &req); len(errs) != 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "errors": errs})
 	}
-	t, err := h.service.UpdateType(c.UserContext(), c.Params("code"), &req)
+	t, err := h.service.UpdateType(c.UserContext(), typeCode(c), &req)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
@@ -89,25 +99,16 @@ func (h *TicketHandler) SetFields(c *fiber.Ctx) error {
 	if errs := validation.ValidateStruct(c.UserContext(), &req); len(errs) != 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "errors": errs})
 	}
-	t, err := h.service.SetFields(c.UserContext(), c.Params("code"), req.Fields)
+	t, err := h.service.SetFields(c.UserContext(), typeCode(c), req.Fields)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 	return utils.SuccessResponse(c, fiber.StatusOK, "fields saved", t)
 }
 
-// GET /ticket-types/:code/go-live-checks — the "Before it can go live" list
-func (h *TicketHandler) GoLiveChecks(c *fiber.Ctx) error {
-	checks, err := h.service.GoLiveChecks(c.UserContext(), c.Params("code"))
-	if err != nil {
-		return utils.ErrorResponse(c, fiber.StatusNotFound, err.Error())
-	}
-	return utils.SuccessResponse(c, fiber.StatusOK, "ok", checks)
-}
-
 // POST /ticket-types/:code/publish — make a draft type live
 func (h *TicketHandler) PublishType(c *fiber.Ctx) error {
-	t, checks, err := h.service.PublishType(c.UserContext(), c.Params("code"))
+	t, checks, err := h.service.PublishType(c.UserContext(), typeCode(c))
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error(), "checks": checks})
 	}
@@ -116,7 +117,7 @@ func (h *TicketHandler) PublishType(c *fiber.Ctx) error {
 
 // DELETE /ticket-types/:code — delete a type that is not live and has no tickets
 func (h *TicketHandler) DeleteType(c *fiber.Ctx) error {
-	if err := h.service.DeleteType(c.UserContext(), c.Params("code")); err != nil {
+	if err := h.service.DeleteType(c.UserContext(), typeCode(c)); err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 	return utils.SuccessResponse(c, fiber.StatusOK, "ticket type deleted", nil)
@@ -131,7 +132,7 @@ func (h *TicketHandler) SaveLink(c *fiber.Ctx) error {
 	if errs := validation.ValidateStruct(c.UserContext(), &req); len(errs) != 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "errors": errs})
 	}
-	link, err := h.service.SaveLink(c.UserContext(), c.Params("code"), &req)
+	link, err := h.service.SaveLink(c.UserContext(), typeCode(c), &req)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
@@ -370,14 +371,13 @@ func (h *TicketHandler) ListAttachments(c *fiber.Ctx) error {
 	return utils.SuccessResponse(c, fiber.StatusOK, "ok", rows)
 }
 
-// GET /tickets/:id/attachments/:attachment_id/download
+// GET /tickets/attachments/:attachment_id/download
 func (h *TicketHandler) DownloadAttachment(c *fiber.Ctx) error {
-	id, err1 := uuid.Parse(c.Params("id"))
-	aid, err2 := uuid.Parse(c.Params("attachment_id"))
-	if err1 != nil || err2 != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid id")
+	aid, err := uuid.Parse(c.Params("attachment_id"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid attachment id")
 	}
-	a, err := h.service.GetAttachment(c.UserContext(), id, aid)
+	a, err := h.service.GetAttachment(c.UserContext(), aid)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusNotFound, err.Error())
 	}
@@ -390,15 +390,14 @@ func (h *TicketHandler) DownloadAttachment(c *fiber.Ctx) error {
 	return c.SendStream(file)
 }
 
-// DELETE /tickets/:id/attachments/:attachment_id
+// DELETE /tickets/attachments/:attachment_id
 func (h *TicketHandler) DeleteAttachment(c *fiber.Ctx) error {
-	id, err1 := uuid.Parse(c.Params("id"))
-	aid, err2 := uuid.Parse(c.Params("attachment_id"))
-	if err1 != nil || err2 != nil {
-		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid id")
+	aid, err := uuid.Parse(c.Params("attachment_id"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid attachment id")
 	}
 	userID := c.Locals(constants.ContextKeys.UserID).(uuid.UUID)
-	a, err := h.service.DeleteAttachment(c.UserContext(), id, aid, userID)
+	a, err := h.service.DeleteAttachment(c.UserContext(), aid, userID)
 	if err != nil {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
