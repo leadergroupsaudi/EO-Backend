@@ -293,6 +293,8 @@ type TicketDetail struct {
 	StateCode   string             `json:"state_code"`
 	StateColor  string             `json:"state_color"`
 	Owner       string             `json:"owner"`
+	OwningBody  string             `json:"owning_body"`
+	Priority    string             `json:"priority"`
 	DueDate     *time.Time         `json:"due_date"`
 	Version     int                `json:"version"`
 	Attributes  datatypes.JSON     `json:"attributes"`

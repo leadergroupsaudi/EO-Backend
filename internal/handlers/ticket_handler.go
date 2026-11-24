@@ -26,7 +26,6 @@ func NewTicketHandler(service *services.TicketService, storage *storage.MinIOSto
 	return &TicketHandler{service: service, storage: storage}
 }
 
-
 func typeCode(c *fiber.Ctx) string {
 	code := c.Params("code")
 	if decoded, err := url.PathUnescape(code); err == nil {
@@ -242,6 +241,25 @@ func (h *TicketHandler) Transition(c *fiber.Ctx) error {
 		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
 	}
 	return utils.SuccessResponse(c, fiber.StatusOK, "transition done", d)
+}
+
+// PUT /tickets/:id/assignment — set the owning body, owner, priority, due date
+// and what is expected back (all required)
+func (h *TicketHandler) Assign(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid id")
+	}
+	var req models.TicketAssignmentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, "invalid request body")
+	}
+	userID := c.Locals(constants.ContextKeys.UserID).(uuid.UUID)
+	d, err := h.service.Assign(c.UserContext(), id, &req, userID)
+	if err != nil {
+		return utils.ErrorResponse(c, fiber.StatusBadRequest, err.Error())
+	}
+	return utils.SuccessResponse(c, fiber.StatusOK, "assignment saved", d)
 }
 
 // GET /tickets/:id/history

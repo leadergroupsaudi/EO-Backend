@@ -91,6 +91,35 @@ func field(label, handle, typ string, required, multi bool) map[string]interface
 	return map[string]interface{}{"label": label, "handle": handle, "type": typ, "required": required, "multi": multi}
 }
 
+// directiveFields: the five details captured at registration (AMAX-4702) are
+// required; the assignment details (AMAX-4703) are set later through
+// PUT /tickets/:id/assignment, which requires them there.
+func directiveFields() []map[string]interface{} {
+	return []map[string]interface{}{
+		// Registration
+		field("Directive text", "subject", "text", true, false),
+		field("Expected outcome", "expected_outcome", "text", true, false),
+		selectField("Source", "source", true, "meeting", "direct"),
+		field("Directive date", "directive_date", "date_hijri_gregorian", true, false),
+		selectField("Sensitivity", "classification", true, "public", "internal", "confidential", "highly_confidential"),
+		field("Issued by", "issued_by", "user", false, false),
+		field("Owning body", "owning_body", "org_unit", false, false),
+		field("Owner", "owner", "user", false, false),
+		selectField("Priority", "priority", false, "low", "medium", "high", "urgent"),
+		field("Due date", "due_date", "date_hijri_gregorian", false, false),
+		field("Expected back", "expected_back", "text", false, false),
+		field("Evidence", "evidence", "file", false, true),
+		field("Execution plan", "execution_plan", "linked_ticket_type", false, false),
+		field("Assignments", "assignments", "linked_ticket_type", false, true),
+	}
+}
+
+func selectField(label, handle string, required bool, options ...string) map[string]interface{} {
+	f := field(label, handle, "select", required, false)
+	f["options"] = options
+	return f
+}
+
 // SeedTicketTypes creates the POC ticket types, their workflows and links.
 // Runs at startup and is idempotent: anything that already exists is left
 // as it is, so changes made through the API are not overwritten.
@@ -158,13 +187,7 @@ func (s *TicketService) SeedTicketTypes(ctx context.Context) error {
 
 		// --- Types ------------------------------------------------------
 		types := []seedType{
-			{"DIR", "directive", "Directive", "توجيه", models.TicketLevelMain, "EO-DIR", "", "EO-DIR-{YYYY}-{NNN}", models.TicketTypeLive, "dir",
-				[]map[string]interface{}{
-					field("Subject", "subject", "text", true, false), field("Issued by", "issued_by", "user", true, false),
-					field("Owning body", "owning_body", "org_unit", true, false), field("Due date", "due_date", "date_hijri_gregorian", true, false),
-					field("Classification", "classification", "select", true, false), field("Evidence", "evidence", "file", false, true),
-					field("Execution plan", "execution_plan", "linked_ticket_type", false, false), field("Assignments", "assignments", "linked_ticket_type", false, true),
-				}},
+			{"DIR", "directive", "Directive", "توجيه", models.TicketLevelMain, "EO-DIR", "", "EO-DIR-{YYYY}-{NNN}", models.TicketTypeLive, "dir", directiveFields()},
 			{"PLN", "execution_plan", "Execution Plan", "خطة التنفيذ", models.TicketLevelSub, "EO-DIR", "DIR", "{parent}-P", models.TicketTypeLive, "plan", nil},
 			{"ASG", "assignment", "Assignment", "تكليف", models.TicketLevelSub, "EO-DIR", "DIR", "{parent}-A{#}", models.TicketTypeLive, "asg", nil},
 			{"CMT", "committee", "Committee", "لجنة", models.TicketLevelMain, "EO-CMT", "", "CMT-{YYYY}-{NN}", models.TicketTypeDraft, "basic", nil},

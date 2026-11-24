@@ -67,6 +67,10 @@ func (t *TicketTransition) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+type TicketAssignmentRequest struct {
+	Attributes map[string]interface{} `json:"attributes"`
+}
+
 // TicketTransitionRequest is the body of POST /tickets/:id/transition.
 type TicketTransitionRequest struct {
 	TransitionID string `json:"transition_id" validate:"required,uuid"`
@@ -102,9 +106,6 @@ type TicketListRow struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// TicketFilter is the filter of the ticket list. POST /tickets/search takes it
-// as the JSON body; GET /tickets builds it from the query string (lists
-// comma-separated, attributes as attr.<handle>=<value>).
 type TicketFilter struct {
 	TypeCodes   []string `json:"type_codes"`   // ["DIR","ASG"]
 	Levels      []string `json:"levels"`       // ticket type levels: ["main","universal"]
@@ -132,14 +133,12 @@ type TicketFilter struct {
 	Limit int    `json:"limit"` // default 20, max 100
 }
 
-// TicketActivityFilter is the query string of GET /tickets/:id/activity.
 type TicketActivityFilter struct {
 	Action string `query:"action"` // commented,transitioned
 	From   string `query:"from"`   // YYYY-MM-DD
 	To     string `query:"to"`     // YYYY-MM-DD, inclusive
 }
 
-// TicketTypeFilter is the query string of GET /ticket-types.
 type TicketTypeFilter struct {
 	Status string `query:"status"` // draft,live,not_started
 	Level  string `query:"level"`  // main,sub,sub_sub,universal

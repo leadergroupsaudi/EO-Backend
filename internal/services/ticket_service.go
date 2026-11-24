@@ -581,7 +581,8 @@ func (s *TicketService) GetTicket(ctx context.Context, id uuid.UUID) (*models.Ti
 	d := &models.TicketDetail{
 		ID: inc.ID, Reference: inc.Reference, Title: inc.Title,
 		TypeCode: t.Code, TypeName: t.Name, Level: t.Level,
-		Owner: ownerName(db, inc.Attributes), DueDate: inc.DueDate,
+		Owner: ownerName(db, inc.Attributes), OwningBody: owningBodyName(db, inc.Attributes),
+		Priority: attrValue(inc.Attributes, "priority"), DueDate: inc.DueDate,
 		Version: inc.Version, Attributes: inc.Attributes,
 		Groups: []models.TicketChildGroup{}, Checklist: []models.ChecklistItem{}, Transitions: []models.TransitionOption{},
 	}
@@ -677,19 +678,25 @@ func (s *TicketService) GetTicket(ctx context.Context, id uuid.UUID) (*models.Ti
 	return d, nil
 }
 
-// ownerName is the owning body's department name (owning_body holds its id).
+// ownerName is the running owner's name when one is assigned (owner holds a
+// user id), otherwise the owning body's department name.
 func ownerName(db *gorm.DB, attrs datatypes.JSON) string {
+	if v := attrValue(attrs, "owner"); v != "" {
+		if _, err := uuid.Parse(v); err != nil {
+			return v
+		}
+		return userDisplayName(db, v)
+	}
+	return owningBodyName(db, attrs)
+}
+
+// owningBodyName is the owning body's department name (owning_body holds its id).
+func owningBodyName(db *gorm.DB, attrs datatypes.JSON) string {
 	v := attrValue(attrs, "owning_body")
-	id, err := uuid.Parse(v)
-	if err != nil {
+	if _, err := uuid.Parse(v); err != nil {
 		return v
 	}
-	var names []string
-	db.Table("departments").Where("id = ?", id).Limit(1).Pluck("name", &names)
-	if len(names) == 0 || names[0] == "" {
-		return v
-	}
-	return names[0]
+	return departmentName(db, v)
 }
 
 func childRow(db *gorm.DB, k *models.Ticket) models.TicketChildRow {

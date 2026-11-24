@@ -428,6 +428,7 @@ func main() {
 	tickets.Get("/:id", authMiddleware.RequirePermission("incidents:view"), ticketHandler.GetTicket)
 	tickets.Get("/:id/history", authMiddleware.RequirePermission("incidents:view"), ticketHandler.History)
 	tickets.Post("/:id/transition", authMiddleware.RequirePermission("incidents:transition"), ticketHandler.Transition)
+	tickets.Put("/:id/assignment", authMiddleware.RequirePermission("incidents:update"), ticketHandler.Assign)
 	tickets.Get("/:id/activity", authMiddleware.RequirePermission("incidents:view"), ticketHandler.Activity)
 	tickets.Post("/:id/comments", authMiddleware.RequirePermission("incidents:comment"), ticketHandler.AddComment)
 	tickets.Get("/:id/comments", authMiddleware.RequirePermission("incidents:view"), ticketHandler.ListComments)

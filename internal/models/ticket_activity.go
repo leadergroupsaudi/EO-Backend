@@ -57,6 +57,7 @@ const (
 	TicketActivityCommented         = "commented"
 	TicketActivityAttachmentAdded   = "attachment_added"
 	TicketActivityAttachmentRemoved = "attachment_removed"
+	TicketActivityAssigned          = "assigned"
 )
 
 // TicketActivity is one line of a ticket's activity log. Every ticket API
